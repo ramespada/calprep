@@ -26,6 +26,7 @@ program calprep
    character(len=8)   :: lulc_lookup(100)=""
    !general
    integer            :: ios
+   character(len=256) :: msg
 
    !---read namelist variables and parameters
    namelist/control /start_date,end_date,proj,dx,dy,nx,ny,xc,yc,prep_surf,prep_up,prep_geo
@@ -39,10 +40,10 @@ program calprep
    print '(" SETUP PHASE")'
 
    open(1,file='namelist.calprep')
-     read(1,nml=control , iostat=ios); if (ios /= 0) stop 'Error: Failed to read control  section on namelist.'!control
-     read(1,nml=surface , iostat=ios); if (ios /= 0) stop 'Error: Failed to read surface  section on namelist.'!surface
-     read(1,nml=upperair, iostat=ios); if (ios /= 0) stop 'Error: Failed to read upperair section on namelist.'!raobs   
-     read(1,nml=geo     , iostat=ios); if (ios /= 0) stop 'Error: Failed to read geo      section on namelist.'!geo   
+     read(1,nml=control , iostat=ios,iomsg=msg);  if (ios /= 0) then; print*,msg;stop 'Error: Failed to read control  section on namelist.';endif!control
+     read(1,nml=surface , iostat=ios,iomsg=msg);  if (ios /= 0) then; print*,msg;stop 'Error: Failed to read surface  section on namelist.';endif!surface
+     read(1,nml=upperair, iostat=ios,iomsg=msg);  if (ios /= 0) then; print*,msg;stop 'Error: Failed to read upperair section on namelist.';endif!raobs   
+     read(1,nml=geo     , iostat=ios,iomsg=msg);  if (ios /= 0) then; print*,msg;stop 'Error: Failed to read geo      section on namelist.';endif!geo   
    close(1)
 
 

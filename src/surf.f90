@@ -17,9 +17,11 @@ module prep_surf
    end type
 
    type station
-      character(len=5)               :: id                   !station id
+      character(len=5)               :: name                 !station id
+      integer                        :: id                   !station id
       integer                        :: time_zone=0
       real                           :: lat, lon, alt        !lat,lon,altitude
+      real(8)                        :: x,y,z                !lat,lon,altitude
       type(observation), allocatable :: O(:)                 !observation array
       integer :: valid_records                               !number of valid records
       logical :: valid=.false.                               !is a valid station?
@@ -59,7 +61,12 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
 
     !Calculate Run length [hours]
     dt         = (end_date - start_date)
-    N_Hours    = int(dt%total_seconds()/(60*60))+1 
+    N_Hours    = int(dt%total_seconds()/(60*60)) + 1  
+
+    !debug:
+    Print*,"  start: ",  start_date%strftime("day: %Y %j. hour: %H %S")     
+    Print*,"    end: ",    end_date%strftime("day: %Y %j. hour: %H %S")     
+    Print*,"    #NT: ",   N_hours, "(hours)."
 
     allocate(S(NSTA))                                              !Allocate station to have NSTA
     
@@ -77,19 +84,20 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
           read(io8,'(A)',iostat=ios)row
 
           !Read Station Header:                                     !Read ISH first row to get staton data.
-          S(i)%id =     row(11:15)                                  !station-id
+          write(S(i)%name,'("SS",i2.2)'),i                          !station-id
+          S(i)%id =atoi(row(11:15))                                 !station-id
           S(i)%lat=real(atoi(row(29:34))/1000.)                     !latitude
           S(i)%lon=real(atoi(row(35:41))/1000.)                     !longitude
           S(i)%alt=real(atoi(row(47:51))/1.)                        !base altitude
 
-          print '("   Station ID: ",a7," (Lat,Lon,Alt:",f7.3,2x,f8.4,2x,f5.1,")"/)',S(i)%id, S(i)%lat, S(i)%lon, S(i)%alt
+          print '("   Station ID: ",a7," (Lat,Lon,Alt:",f7.3,2x,f8.4,2x,f5.1,")"/)', S(i)%id, S(i)%lat, S(i)%lon, S(i)%alt
 
-          current_date =strptime(row(16:27),"%Y%m%d%H%M")                  !date  YYYYMMDDHHmm
+          current_date = strptime(row(16:27),"%Y%m%d%H%M")                  !date  YYYYMMDDHHmm
           next_date    = start_date
-          do while ( current_date <= end_date)                             !Loop over each record till end_date is reached.
+          do while ( current_date <= end_date)                              !Loop over each record till end_date is reached.
 
              current_date = strptime(row(16:27),"%Y%m%d%H%M") 
-             !print*,"current: ",current_date%strftime("day: %Y %j. hour: %H %s")         
+             !print*,"current: ",current_date%strftime("day: %Y %j. hour: %H %S")     
 
              if ( current_date >= start_date ) then                        !Proceed if start_date has been reached.
 
@@ -97,8 +105,9 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
 
                 dt=current_date - start_date
                 t=int(dt%total_seconds()/3600) + 1
-                !print*,"t=",t, S(i)%O(t)%date%strftime("%Y %m %d %H")
+                !print*,"t=",t, O%date%strftime("%Y %m %d %H")
 
+                if ( t > N_Hours) exit 
                 if ( O%valid ) then
                    S(i)%O(t)=O
                    S(i)%valid_records=S(i)%valid_records + 1
@@ -113,7 +122,7 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
                 end if
 
                 next_date = current_date + timedelta(hours=1)            !Define next expected date
-                !print*,"next:   ",next_date%strftime("day: %Y %j. hour: %H %s")
+                !print*,"next:   ",next_date%strftime("day: %Y %j. hour: %H %S")
              end if
 
              read(io8,'(A)',iostat=ios)row
@@ -122,7 +131,7 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
           end do
           close(io8)                                                    !Close Input  file
 
-          if ( S(i)%valid_records .le. 0.7*N_Hours ) then
+          if ( S(i)%valid_records .le. 0.3*N_Hours ) then
              print '("ERROR. No enough valid records for the dates requested found in provided file.")'
              S(i)%valid=.false.
              NSTA=NSTA-1
@@ -190,15 +199,18 @@ subroutine read_ish_record(row, o)
      integer :: nchar
      character(12) :: date !yyyymmddhhmin
      real   :: wd,ws,vis,tmp,dp,slp
-     integer:: iceil
+     character :: awdqc,awsqc,aceilqc,avisqc,atempqc,adpqc,aslpqc,wdtype !quality checks
+     integer:: iceil,irh
 
      real :: tmpf, dpf    !vars used to compute rh
      real :: pp_mm,pp_t   !vars used to compute prate & pcode
 
      !Fixed position values:
      fix=row(1:105)
-     read(fix,"(i4,11x,a12,33x,f3.0,2x,f4.1,1x,i5,3x,f6.3,3x,f5.1,1x,f5.1,1x,f5.1,1x)"),nchar,date,wd,ws,iceil,vis,tmp,dp,slp
-     !debug: print*,date,wd,ws,iceil,vis,tmp,dp,slp
+     !read(fix,"(i4,11x,a12,33x,f3.0,2x,f4.1,1x,i5,3x,f6.3,3x,f5.1,1x,f5.1,1x,f5.1,1x)"),nchar,date,wd,ws,iceil,vis,tmp,dp,slp
+     !debug: 
+     !print*,date,wd,ws,iceil,vis,tmp,dp,slp
+     read(fix,'(i4,11x,a12,33x,f3.0,a1,a1,f4.1,a1,i5,a1,2x,f6.3,a1,2x,f5.1,a1,f5.1,a1,f5.1,a1)') nchar,date,wd,awdqc,wdtype,ws,awsqc,iceil,aceilqc,vis,avisqc,tmp,atempqc,dp,adpqc,slp,aslpqc
 
      !check how many valid fields the record has:
      n_valid=0
@@ -210,25 +222,58 @@ subroutine read_ish_record(row, o)
      if (  dp   <  999.9 ) n_valid=n_valid+1
      if ( slp   < 9999.9 ) n_valid=n_valid+1
 
+     !from SMERGE: ---------------------------------------------------
+     !convert ceiling height from m to 100s of ft
+     if(iceil.gt.99998.or.ishqc(aceilqc).eq.9) then
+       iceil=9999
+     else
+       if(iceil.eq.22000) then
+         iceil=999
+       else
+         iceil=nint(float(iceil)/30.48)
+       endif
+     endif
+     !convert visibility from km to miles
+     if(vis.gt.999.98.or.ishqc(avisqc).eq.9) then
+       vis=99999.
+     else
+       vis=vis/1.6093
+     endif
+     !check temperature and calculate humidity if possible
+      if(tmp.gt.999.8.or.ishqc(atempqc).eq.9) then
+        tmp=9999.
+        irh=9999
+      else
+        tmp=tmp+273.15
+        if(dp.gt.999.8.or.ishqc(adpqc).eq.9) then
+          irh=9999
+        else
+          !compute relative humidity
+          tmpf=(tmp-273.15)*1.8+32.
+          dpf=dp*1.8+32.
+          irh=nint(100.*(((173.-0.1*tmpf+dpf)/(173.+0.9*tmpf))**8))
+          irh=max(min(irh,100),1)
+        endif
+      endif
+
+     !check sea-level pressure
+     if(slp.gt.9999.8.or.ishqc(aslpqc).eq.9) slp=9999.
+
+     !end from SMERGE----------------------------------------------
+
      !decide if valid
      if ( n_valid > 5 ) then
         o%valid=.true.
 
         o%date=strptime(date,"%Y%m%d%H%M") !record date YYYYMMDDHHmm
-        o%wd   = wd /1.0       !deg.
-        o%ws   = ws !/10.      !m/s*10 -> m/s
-        o%iceil= iceil/1000    !  m    -> km
-        o%vis  = vis/1000.     !  m    -> km            
-        o%tmp  = tmp  + 273.15 !  ºC  -> ºK
-        dp     =  dp  + 273.15 !  ºC  -> ºK
-        o%pres = slp/10.       !hPa*10 -> hPa
-
-        !compute relative humidity
-        !o%irh=int( (exp((17.625*dwpt)/(243.04+dwpt)) / exp((17.625*(o%tmp-273.2))/(243.04+(o%tmp-273.2)))) );
-        tmpf=(o%tmp-273.15)*1.8+32.
-        dpf=(dp-273.15)*1.8+32.
-        o%irh=nint(100.*(((173.-0.1*tmpf+dpf)/(173.+0.9*tmpf))**8))
-        o%irh=max(min(o%irh,100),1)
+        o%wd   =wd /1.0              !deg.
+        o%ws   =ws                   !m/s*10 -> m/s
+        o%iceil=iceil                !!iceil/1000    !  m    -> km
+        o%vis  =vis                  !!vis/1000.     !  m    -> km            
+        o%tmp  =tmp                  !!tmp  + 273.15 !  ºC  -> ºK
+        o%irh  =irh                  !
+        dp     = dp                  !! dp  + 273.15 !  ºC  -> ºK
+        o%pres =slp                  !!slp/10.       !hPa*10 -> hPa
 
         !Additional flag-associated variables:
         extra=row(106:106+nchar)
@@ -260,18 +305,51 @@ subroutine read_ish_record(row, o)
         end if
 
         !MA1 (pressure)
-        if ( slp > 9999.0 ) then
+        if ( slp == 9999.  ) then
            j=INDEX(extra,'MA1')
            if ( j > 0) then
               o%pres=real(atoi(extra(j+9:j+13)))/10.
            end if
-         endif
+        endif
 
      else
         o%valid=.false.
      end if
 
 end subroutine
+
+integer function ishqc(aqc)
+      !ish variables "quality check" (From SMERGE)
+      implicit none
+      character(len=*):: aqc
+      logical         :: lunknown=.true.
+      if(ICHAR(aqc).GE.48 .AND. ICHAR(aqc).LE.57) then
+         lunknown=.FALSE.
+      else
+         !Test for known characters
+         if(aqc.EQ.'A') lunknown=.FALSE.
+         if(aqc.EQ.'C') lunknown=.FALSE.
+         if(aqc.EQ.'I') lunknown=.FALSE.
+         if(aqc.EQ.'M') lunknown=.FALSE.
+         if(aqc.EQ.'P') lunknown=.FALSE.
+         if(aqc.EQ.'R') lunknown=.FALSE.
+         if(aqc.EQ.'U') lunknown=.FALSE.
+      endif
+      if(lunknown) then
+         write(*,*)'ERROR in subroutine ISHQC'
+         write(*,*)'Data quality flag is not known: ',aqc
+         write(*,*)'Current flags are 0-9 and A,C,I,M,P,R,U'
+         stop
+      endif
+      !Current character codes indicate values may be used, so test for restricted integer values
+      if(aqc.EQ.'3' .OR. aqc.EQ.'7') then
+        ishqc=9
+      else
+        ishqc=1
+      endif
+      return
+end function
+
 
 subroutine write_Surf_Dat(oFile, S,sdate,edate)
    implicit none
@@ -285,9 +363,10 @@ subroutine write_Surf_Dat(oFile, S,sdate,edate)
 
    character(16) ::  dataset,dataver
    character(64) ::  datamod
-
+   character(16) :: clat,clon
+   character(1)  :: hem,mer        !hemispherio & meridiano
    ! --- Configure output variables
-   data dataset/'SURF.DAT'/, dataver/'3.0'/
+   data dataset/'SURF.DAT'/, dataver/'2.1'/
    data datamod/'Hour Start and End Times with Seconds'/
 
    NSTA   =size(S(:))
@@ -297,24 +376,34 @@ subroutine write_Surf_Dat(oFile, S,sdate,edate)
 
      !Header:
      write(io,'(2a16,a64)') dataset,dataver,datamod
-     !Proj
-     write(io,*) 'ESPG:4326'      
+     write(io,*),'1'           !n-comments   
+     write(io,*),'ESPG:4326'
+     write(io,'("LL",/,"WGS-84   01-01-2001"/,"DEG")')
      !Start / End time
-     write(io,*) S(1)%Time_zone 
-     write(io,*) sdate%strftime("%Y %j %H %S"), edate%strftime(" %Y %j %H %S")!, NSTA 
+     write(io,'(a3,sp,i3.2,ss,i2.2)') "UTC",0,0
+     write(io,*) sdate%strftime("%Y  %j   %H   %S"), edate%strftime(" %Y  %j   %H   %S"), NSTA 
      !Station coordinates
-     write(io,*) NSTA
+     !write(io,*) NSTA
      do i=1,NSTA
-        write(io,*) S(i)%id, S(i)%lat, S(i)%lon, S(i)%alt
+        hem="N"; if ( S(i)%lat < 0 ) hem="S"
+        mer="E"; if ( S(i)%lon < 0 ) mer="W"     
+        write(clat,"(f12.4,a1)"),abs(S(i)%lat),hem
+        write(clon,"(f12.4,a1)"),abs(S(i)%lon),mer
+        write(io,'(i12,a12,2a16,f12.2)')S(i)%id,S(i)%name, clat,clon, S(i)%alt
+        !write(io,'(a12,f12.3,f12.3,f12.2)') adjustl(S(i)%id), S(i)%x*1E-03, S(i)%y*1E-03, S(i)%z
      enddo
      !Body:
      do t=1,N_Hours
         !Current date
-        write(io,*) S(1)%O(t)%date%strftime("%Y %j %H %S ")!,S(1)%O(t+1)%date%strftime("%Y %-j %-H %-S")
+        write(io,*)S(1)%O(t)%date%strftime("%Y %j %-H %-S"),S(1)%O(t+1)%date%strftime(" %Y %j %-H %-S")
+        !format(2(3i4,i5,3x))
+
         !Station record (for each station)
         do i=1, NSTA
            o=S(i)%O(t)
-           write(io,'(f8.3,f8.3,i6,i6,f9.3,i6,f9.3,i6)') o%ws,o%wd,o%iceil,o%icc,o%tmp,o%irh,o%pres,o%ipcode
+           !write(io,*) o%ws,o%wd,o%iceil,o%icc,o%tmp,o%irh,o%pres,o%ipcode
+           write(io,'(1x,f8.3,1x,f8.3,1x,i4,1x,i4,1x,f8.3,1x,i4,1x,f8.3,1x,i4,1x,f8.3)') o%ws,o%wd,o%iceil,o%icc,o%tmp,o%irh,o%pres,o%ipcode!,o%prate
+           !format(1x,f8.3,1x,f8.3,1x,i4,1x,i4,1x,f8.3,1x,i4,1x,f8.3,1x,i4,1x,f8.3), (ws(n),wd(n),iceil(n),icc(n),tempk(n),irh(n),pres(n),ipcode(n),xprate(n),n=1,nssta)
         end do
      end do
 

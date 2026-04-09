@@ -256,53 +256,64 @@ subroutine write_geo(g,z,lu,a0,b0,z0,H,Ha,LAI)
 
    open(io7,file='geo.dat', action='write',status='replace')
    
-      !HEADER:
-      write(io7,*)"#GEO.DAT     3.0     Produced by CALPREP version 0.0"
-      write(io7,*)"#"//adjustl(g%proj)
-      write(io7,*)"ncols",     g%nx
-      write(io7,*)"nrows",     g%ny
-      write(io7,*)"xllcorner", g%xmin
-      write(io7,*)"yllcorner", g%ymin   
-      write(io7,*)"cellsize",  g%dx
-      write(io7,*)"NODATA_value", -9999  
-
+      !!HEADER:
+      !write(io7,*)"#GEO.DAT     3.0     Produced by CALPREP version 0.0"
+      !write(io7,*)"#"//adjustl(g%proj)
+      !write(io7,*)"ncols",     g%nx
+      !write(io7,*)"nrows",     g%ny
+      !write(io7,*)"xllcorner", g%xmin
+      !write(io7,*)"yllcorner", g%ymin   
+      !write(io7,*)"cellsize",  g%dx
+      !write(io7,*)"NODATA_value", -9999  
+      !HEADER: (original format)
+      write(io7,'("GEO.DAT",/,"1",/,"Produced by makegeo v0.0")') !title
+      write(io7,'("UTM")')
+      write(io7,'(a10)') trim(g%proj)                               !proj 
+      write(io7,'("WGS-84   01-01-2000")')
+      write(io7,'(2i8,4f12.3)') g%nx,g%ny,g%xmin*1e-03,g%ymin*1e-03,g%dx*1e-03,g%dy*1e-03!grid 
+      write(io7,'(a4)') 'KM'
       !LANDUSE:
-      write(io7,'("#","1",3x," - ",70a)') 'land use dat' 
+      !write(io7,'(1x,f6.4,1x," - ",a70)') 1.0,'LAND USE DATA - (1=new categories)'
+      write(io7,'(1x,i6,1x," - ",a70)') 1  ,'LAND USE DATA - (1=new categories)'
+      write(io7,'("14  51  55 - NLU, IWAT1, IWAT2")')
+      write(io7,'("10  20 -20  30  40  51  54  55  60  61  62  70  80  90")')
+      !write(io7,'("#",30a)') 'land use dat' 
       do j=g%ny,1,-1
          write(io7,'(10(i7,a1))') (lu(n,j),ccomma,n=1,g%nx-1),lu(g%nx,j)
+         !write(io7,'(100(i7,a1))') (lu(n,j),ccomma,n=1,g%nx-1),lu(g%nx,j)
       enddo
       !TERRAIN:
-      write(io7,'("#","1",3x," - ",70a)') 'terrain heights' 
+      write(io7,'(1x,f6.4,1x," - ",a70)') 1.0,'TERRAIN heights - HTFAC (Conversion to meters)'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (z(n,j),ccomma,n=1,g%nx-1),z(g%nx,j)
       enddo
       !Z0
-      write(io7,'("#","2",3x," - ",70a)') 'gridded z0 field'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded z0 field'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (z0(n,j),ccomma,n=1,g%nx-1),z0(g%nx,j)
       enddo
       !A0
-      write(io7,'("#","2",3x," - ",70a)') 'gridded albedo field'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded albedo field'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (a0(n,j),ccomma,n=1,g%nx-1),a0(g%nx,j)
       enddo
       !B0
-      write(io7,'("#","2",3x," - ",70a)') 'gridded Bowen ratio field'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded Bowen ratio field'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (b0(n,j),ccomma,n=1,g%nx-1),b0(g%nx,j)
       enddo
       !H
-      write(io7,'("#","2",3x," - ",70a)') 'gridded soil heat flux parameters'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded soil heat flux parameters'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (H(n,j),ccomma,n=1,g%nx-1),H(g%nx,j)
       enddo
       !H_antro
-      write(io7,'("#","2",3x," - ",70a)') 'gridded anthropogenic heat flux field'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded anthropogenic heat flux field'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (Ha(n,j),ccomma,n=1,g%nx-1),Ha(g%nx,j)
       enddo
       !LAI
-      write(io7,'("#","2",3x," - ",70a)') 'gridded leaf area index field'
+      write(io7,'(1x,"2",3x," - ",a70)') 'gridded leaf area index field'
       do j=g%ny,1,-1
          write(io7,'(100(f7.2,a1))') (LAI(n,j),ccomma,n=1,g%nx-1),LAI(g%nx,j)
       enddo

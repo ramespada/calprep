@@ -264,24 +264,40 @@ subroutine write_header(io, s, sdate, edate, pStop)
 
     character(16) ::  dataset,dataver
     character(64) ::  datamod
+    character(16) ::  clon,clat      
+    character(1)  ::  hem,mer
 
     ! --- Configure output variables
-    data dataset/'UP.DAT'/, dataver/'3.0'/
+    data dataset/'UP.DAT'/, dataver/'2.1'/
     data datamod/'Hour Start and End Times with Seconds'/
+
+    integer :: ibyr,ibjd,ibhr, ibsec
+    integer :: ieyr,iejd,iehr, iesec
+    character(len=18) :: a,b
+
+    a=sdate%strftime("%Y %j %H %S")
+    b=edate%strftime("%Y %j %H %S")
+    read(a,"(i4,i4,i3,i3)") ibyr,ibjd,ibhr,ibsec
+    read(b,"(i4,i4,i3,i3)") ieyr,iejd,iehr,iesec
 
     !Header:
     write(io,'(2a16,a64)') dataset,dataver,datamod
-    write(io,*) 'EPSG:4326'                        !proj
+    write(io,*) '1'                 !n-comments   
+    write(io,*) 'EPSG:4326'               !proj
+    write(io,'("LL",/,"WGS-84  10-10-2002"/,"DEG")')
     !Start / End time
-    write(io,'(a8)') 0                             !time zone (allways UTC)
-    write(io,*) sdate%strftime("%Y %j %H %S"), edate%strftime(" %Y %j %H %S")
-    !write(io,'(17a,17a,f5.0,2i5)'), sdate%strftime(" %Y  %j   %H    0"), edate%strftime(" %Y  %j   %H    0"),pStop
+    write(io,'(a3,sp,i3.2,ss,i2.2)')"UTC",0,0            !time zone (allways UTC)
+    write(io,'(1x,8i5,f5.0,2i5)') ibyr,ibjd,ibhr,ibsec,ieyr,iejd,iehr,iesec, pStop,3,2 
+    !FORMAT(   1X,8I5,F5.0,2I5)
     !Field flags:
-    write(io,*) pstop
-    write(io,*) lht,ltemp,lwd,lws
+    write(io,'(1x,4(4x,l1))') lht,ltemp,lwd,lws
     !Station coordinates
-    write(io,*) s%id(6:11),s%lat,s%lon,s%elev
-
+    hem="N"; if ( s%lat < 0 ) hem="S"
+    mer="E"; if ( s%lon < 0 ) mer="W"
+    write(clat,"(f11.4,a1)") abs(s%lat),hem
+    write(clon,"(f11.4,a1)") abs(s%lon),mer
+    write(io,'(a8,3x,a4,3x,2(1x,a12,3x),i7)') s%id(6:11),s%id,clat,clon,int(S%elev)
+    ! FORMAT  (A8,2X,A1,A4,A1,2X,2(A1,A16,A1,2X),I7) stnid,q,cname,q,q,clat,q,q,clon,q,ielevm
 end subroutine
 
 subroutine write_sounding(io, s)
@@ -289,8 +305,18 @@ subroutine write_sounding(io, s)
    integer            ,intent(in)    :: io
    type(igra_sounding),intent(in)    :: s
    integer :: i
+   type(datetime) ::this_date,next_date
+   integer :: iyr,imo,idy,ihr,isec
+   integer :: iyr1,imo1,idy1,ihr1,isec1
    !print*, "> write_sounding"
+   character(len=18) :: a,b
 
+   this_date=s%date 
+   next_date=this_date + timedelta(hours=6)
+   a=this_date%strftime("%Y %m %d %H %S")
+   b=next_date%strftime("%Y %m %d %H %S")
+   read(a,"(i4,i3,i3,i3,i3)"),iyr ,imo ,idy ,ihr ,isec
+   read(b,"(i4,i3,i3,i3,i3)"),iyr1,imo1,idy1,ihr1,isec1
    !c-- CHECKs and repair to implement before writing sounding:
    !=== Non-Reparable problems:      
    !--[x] First level should be at the ground: 
@@ -307,13 +333,14 @@ subroutine write_sounding(io, s)
    !      -   0  < WS < ?    m/s
    !      - 175  < T  < 322  K
    !      -   0  < P  < 1040 mbar
-
    if ( s%istop > 4 ) then
       ! --- Explicit beg/ending times with seconds (format 2.1) (FRR 041123)
-      write(io,*) s%date%strftime("%Y %m %d %H %S ")!,s%date%strftime("%Y  %-m  %-d %-H  %-S"),s%nlev,s%istop-1
-      !write(io,"(3x,'6201',2x,a8,2(4x,a19),i5,3x,i5)") s%id(6:11),s%date%strftime("%Y  %-m %-d %-H  %S"),s%date%strftime("%Y  %-m  %-d %-H  %S"),s%nlev,s%istop-1
+      write(io,'(3x,"6201",2x,A8,2(4x,i4,i4,i3,i3,i5),i5,3x,i5)'),s%id(6:11),iyr,imo,idy,ihr,isec,iyr1,imo1,idy1,ihr1,isec1,s%nlev,s%istop-1
+      !FORMAT(   3X,'6201',2X,A8,2(4x,i4,i4,i3,i3,i5),i5,3x,i5)
       ! --- Write a comma-delimited file
       write(io,"(4(3x,f6.1,',',f5.0,',',f5.1,',',i3,',',f5.1,','))") (s%r(i)%p,s%r(i)%z,s%r(i)%t,s%r(i)%wd,s%r(i)%ws, I=1,s%istop-1)
+      !FORMAT   (4(3X,F6.1,',',F5.0,',',F5.1,',',I3,',',f5.1,a1))
+
    else
       print '("Warning: Sounding descarted, too few valid levels (date-time: ",A,")")',s%date % isoformat()
    end if
