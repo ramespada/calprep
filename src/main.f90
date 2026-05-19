@@ -14,6 +14,7 @@ program calprep
    integer            :: nx,ny
    real               :: dx,dy,xc,yc
    logical            :: prep_surf=.false. ,prep_up=.false. ,prep_geo=.false.
+   real               :: timezone
    !surface:
    character(len=256) :: surface_files(max_files)
    integer            :: surface_nsta
@@ -29,7 +30,7 @@ program calprep
    character(len=256) :: msg
 
    !---read namelist variables and parameters
-   namelist/control /start_date,end_date,proj,dx,dy,nx,ny,xc,yc,prep_surf,prep_up,prep_geo
+   namelist/control /start_date,end_date,proj,dx,dy,nx,ny,xc,yc,prep_surf,prep_up,prep_geo,timezone
    namelist/surface /surface_files,surface_nsta
    namelist/upperair/upperair_files,upperair_ptop
    namelist/geo     /terrain_file,lulc_file,lulc_lookup    
@@ -50,7 +51,7 @@ program calprep
    print '(" COMPUTATIONAL PHASE")'
 
    !--- Surface  Met. data (ISH) -> surf.dat
-   if ( prep_surf ) call ish2surf(start_date, end_date, surface_files(1:surface_nsta))
+   if ( prep_surf ) call ish2surf(start_date, end_date,timezone, surface_files(1:surface_nsta))
   
    !--- Upperair Met. data (IGRA) -> up.dat
    if ( prep_up   ) call igra2up(start_date, end_date, upperair_ptop, upperair_files(:))

@@ -29,7 +29,7 @@ module prep_surf
    
 contains
 
-subroutine ish2surf(sdate, edate, file_list)!, nsta)
+subroutine ish2surf(sdate, edate, time_zone_float, file_list)!, nsta)
     !
     !PURPOSE: Read ISH file and produce surf.dat and precip.dat files
     !
@@ -37,6 +37,7 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
     character(*)  ,intent(in)   :: file_list(:)          !Input Surfac Met. (ISH) files list.
 
     character(19) ,intent(in)   :: sdate, edate
+    real          ,intent(in)   :: time_zone_float        !Time zone in Hours
     integer                     :: NSTA                   !Number of stations
     type(station) ,allocatable  :: S(:)                   !record buffer
     logical                     :: file_exists=.false.    !flag file existence
@@ -45,10 +46,14 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
     integer                     :: ios                    !I/O status indice
     character(500)              :: row
 
-    type(datetime)   :: current_date,next_date,start_date,end_date
+    type(datetime)   :: current_date_utc, current_date,next_date,start_date,end_date
     type(timedelta)  :: dt                                        !delta time
     integer          :: N_Hours,hours                             !Run length [hours]
     integer          :: i,j,k,t
+ 
+     
+    integer         :: tz_sign,tz_hours,tz_minutes
+    type(timedelta) :: time_zone
 
     type(observation) :: O
 
@@ -56,6 +61,15 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
 
     start_date = strptime(sdate,'%Y-%m-%d %H:%M:%S') 
     end_date   = strptime(edate,'%Y-%m-%d %H:%M:%S')
+
+    !Calculate time zone:
+    tz_sign   = sign(1,int(time_zone_float))
+    tz_hours  = int(time_zone_float)
+    tz_minutes= int(time_zone_float - tz_hours)*60
+    time_zone=timedelta(hours= tz_hours, minutes=tz_sign*tz_minutes)
+
+    !Print '("DeBUG:   sign:",i3,", tz_hours:", i3,", tz_mins:",i3)',tz_sign,tz_hours,tz_minutes
+    !Print '("DeBUG:   Total tz (secs):",i6)',int(time_zone%total_seconds())
 
     NSTA = size(file_list)                                          !Get Number of Stations to use
 
@@ -92,16 +106,18 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
 
           print '("   Station ID: ",a7," (Lat,Lon,Alt:",f7.3,2x,f8.4,2x,f5.1,")"/)', S(i)%id, S(i)%lat, S(i)%lon, S(i)%alt
 
-          current_date = strptime(row(16:27),"%Y%m%d%H%M")                  !date  YYYYMMDDHHmm
+          current_date = strptime(row(16:27),"%Y%m%d%H%M") + time_zone      !date  YYYYMMDDHHmm
           next_date    = start_date
           do while ( current_date <= end_date)                              !Loop over each record till end_date is reached.
 
-             current_date = strptime(row(16:27),"%Y%m%d%H%M") 
-             !print*,"current: ",current_date%strftime("day: %Y %j. hour: %H %S")     
-
+             current_date_utc = strptime(row(16:27),"%Y%m%d%H%M")  
+             current_date     = current_date_utc + time_zone
              if ( current_date >= start_date ) then                        !Proceed if start_date has been reached.
 
+
+                print*,"current: ",current_date_utc%strftime("%Y-%j %H:%S:00 UTC"),"   ",current_date%strftime("%Y-%j %H:%S:00 LST")
                 call read_ISH_record(row, O)
+                O%date=O%date+time_zone
 
                 dt=current_date - start_date
                 t=int(dt%total_seconds()/3600) + 1
@@ -145,7 +161,7 @@ subroutine ish2surf(sdate, edate, file_list)!, nsta)
     enddo ! each station "i"
 
     !Write output:
-    call Write_Surf_dat  ('surf.dat'  , S, start_date, end_date)
+    call Write_Surf_dat  ('surf.dat'  , S, start_date, end_date, tz_hours, tz_minutes)
 
     print '(/"surf.dat created succesfully?      ")'
     print '("-----------------------------------"/)'
@@ -351,15 +367,16 @@ integer function ishqc(aqc)
 end function
 
 
-subroutine write_Surf_Dat(oFile, S,sdate,edate)
+subroutine write_Surf_Dat(oFile, S, sdate, edate, tz_hour, tz_min)
    implicit none
    character(*)  ,intent(in)  :: oFile
-   type(station)  ,intent(in) :: S(:)
+   type(station) ,intent(in)  :: S(:)
    type(datetime),intent(in)  :: sdate,edate
+   integer       ,intent(in)  :: tz_hour,tz_min
    integer                    :: io=7
    type(observation)          :: O
    integer :: i,t
-   integer :: NSTA, N_Hours, Time_zone
+   integer :: NSTA, N_Hours!, Time_zone
 
    character(16) ::  dataset,dataver
    character(64) ::  datamod
@@ -380,7 +397,7 @@ subroutine write_Surf_Dat(oFile, S,sdate,edate)
      write(io,*),'ESPG:4326'
      write(io,'("LL",/,"WGS-84   01-01-2001"/,"DEG")')
      !Start / End time
-     write(io,'(a3,sp,i3.2,ss,i2.2)') "UTC",0,0
+     write(io,'(a3,sp,i3.2,ss,i2.2)') "UTC",tz_hour,tz_min
      write(io,*) sdate%strftime("%Y  %j   %H   %S"), edate%strftime(" %Y  %j   %H   %S"), NSTA 
      !Station coordinates
      !write(io,*) NSTA
