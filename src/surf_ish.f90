@@ -1,4 +1,4 @@
-module prep_surf
+module prep_surf_ish
    !
    ! Module to parse ISH files to SURF.dat & PRECIP.dat files for CALMET
    !

@@ -1,4 +1,4 @@
-module prep_uppa
+module prep_uppa_igra
    !
    ! Module to parse IGRA files to UP.dat files for CALMET
    !

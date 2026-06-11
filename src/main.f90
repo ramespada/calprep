@@ -2,8 +2,9 @@ program calprep
    !
    !Prepare met and geo data for CALMET.
    !
-   use prep_uppa
-   use prep_surf
+   use prep_uppa_igra
+   use prep_surf_ghcn
+   use prep_surf_ish
    use calgeo      !prep geo.dat
 
    implicit none
@@ -18,6 +19,7 @@ program calprep
    !surface:
    character(len=256) :: surface_files(max_files)
    integer            :: surface_nsta
+   integer            :: surface_fmt=1  !input format for surface data (0: ishd, 1: ghcn)
    !upperair:
    character(len=256) :: upperair_files(20)
    real               :: upperair_ptop
@@ -31,7 +33,7 @@ program calprep
 
    !---read namelist variables and parameters
    namelist/control /start_date,end_date,proj,dx,dy,nx,ny,xc,yc,prep_surf,prep_up,prep_geo,timezone
-   namelist/surface /surface_files,surface_nsta
+   namelist/surface /surface_files,surface_nsta,surface_fmt
    namelist/upperair/upperair_files,upperair_ptop
    namelist/geo     /terrain_file,lulc_file,lulc_lookup    
    !namelist/prog    /wrf_file,geo_file!,lulc_files,lulc_categories
@@ -50,10 +52,16 @@ program calprep
 
    print '(" COMPUTATIONAL PHASE")'
 
-   !--- Surface  Met. data (ISH) -> surf.dat
-   if ( prep_surf ) call ish2surf(start_date, end_date,timezone, surface_files(1:surface_nsta))
+   !--- Surface  Met. data 
+   if (prep_surf) then
+     ! (ISH)  -> surf.dat
+     if ( surface_fmt .eq. 0 ) call ish2surf(start_date, end_date,timezone, surface_files(1:surface_nsta))
+     ! (GHCN) -> surf.dat
+     if ( surface_fmt .eq. 1 ) call ghcn2surf(start_date, end_date,timezone, surface_files(1:surface_nsta))
+   end if
   
-   !--- Upperair Met. data (IGRA) -> up.dat
+   !--- Upperair Met. data 
+   !  (IGRA) -> up.dat
    if ( prep_up   ) call igra2up(start_date, end_date, upperair_ptop, upperair_files(:))
 
    !--- Topography & surface parameters  (GTIFF) -> geo.dat
