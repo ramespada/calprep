@@ -35,7 +35,7 @@ program calprep
    namelist/control /start_date,end_date,proj,dx,dy,nx,ny,xc,yc,prep_surf,prep_up,prep_geo,timezone
    namelist/surface /surface_files,surface_nsta,surface_fmt
    namelist/upperair/upperair_files,upperair_ptop
-   namelist/geo     /terrain_file,lulc_file,lulc_lookup    
+   namelist/geo     /terrain_file,lulc_file,lulc_lookup
    !namelist/prog    /wrf_file,geo_file!,lulc_files,lulc_categories
 
    print '("CALPREP",/)'
